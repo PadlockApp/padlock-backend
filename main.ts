@@ -84,13 +84,13 @@ wss.on('connection', (ws: SuperWS) => {
                     if (token) {
                         const verification = jwt.verify(token, JWT_PKEY) as AuthToken;
                         uid = verification.uid;
-                        const res: Res = { data: { token } };
+                        const res: Res = { status: 200 };
                         ws.send(JSON.stringify(res));
                     } else {
                         uid = (req.payload as AuthPayload).uid;
                         const iat = new Date().getTime() / 1000;
                         const token = jwt.sign({ uid, iat }, JWT_PKEY);
-                        const res: Res = { data: { token } };
+                        const res: Res = { status: 200, data: { token } };
                         ws.send(JSON.stringify(res));
                     }
                     break;
@@ -118,7 +118,7 @@ wss.on('connection', (ws: SuperWS) => {
             }
         } catch (e) {
             const error = e as Error;
-            const res: Res = { error: { status: 400, message: error.message } };
+            const res: Res = { status: 400, error: { message: error.message } };
             ws.send(JSON.stringify(res));
         }
     });

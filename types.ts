@@ -36,12 +36,12 @@ export interface ItemReturn {
 export type Return = AuthReturn | ItemReturn | ItemReturn[];
 
 export interface ErrorLog {
-    status: number
     message: string
 }
 
 
 export interface Res {
+    status: number
     data?: Return
     error?: ErrorLog
 }
