@@ -7,6 +7,7 @@ export interface SuperWS extends WebSocket {
 export interface AuthPayload {
     uid: string
     signature: string
+    token?: string
 }
 
 export interface ItemPayload {
@@ -43,4 +44,9 @@ export interface ErrorLog {
 export interface Res {
     data?: Return
     error?: ErrorLog
+}
+
+export interface AuthToken {
+    uid: string
+    iat: number
 }

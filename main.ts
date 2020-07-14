@@ -2,20 +2,22 @@
 import express from 'express';
 import http from 'http';
 import WebSocket, { AddressInfo } from 'ws';
-import { SuperWS, Req, AuthPayload, ItemPayload, Res } from './types';
+import { assert } from './helper';
+import { SuperWS, Req, AuthPayload, ItemPayload, Res, AuthToken } from './types';
 import { createPow } from "@textile/powergate-client";
 import { Client, KeyInfo, ThreadID } from '@textile/hub';
 import { Libp2pCryptoIdentity } from '@textile/threads-core';
+import jwt from 'jsonwebtoken';
 import { config } from 'dotenv';
 import { FileSchema } from './schemas';
 config();
 
 const {
     POW_HOST,
-    SPACE_HOST,
     POW_TOKEN,
     DB_USER_API_KEY,
     DB_USER_API_SECRET,
+    JWT_PKEY,
 } = process.env;
 
 const app = express();
@@ -25,14 +27,6 @@ const server = http.createServer(app);
 
 //initialize the WebSocket server instance
 const wss = new WebSocket.Server({ server });
-
-const assert = (condition: boolean, description?: string) => {
-    if (condition) {
-        return;
-    } else {
-        throw Error(description)
-    }
-}
 
 // init
 (async () => {
@@ -86,8 +80,19 @@ wss.on('connection', (ws: SuperWS) => {
             switch (req.action) {
                 case 'getAuth':
                     assert(uid === null, 'Already authorized');
-                    uid = (req.payload as AuthPayload).uid;
-                    console.log(uid);
+                    const token = (req.payload as AuthPayload).token;
+                    if (token) {
+                        const verification = jwt.verify(token, JWT_PKEY) as AuthToken;
+                        uid = verification.uid;
+                        const res: Res = { data: { token } };
+                        ws.send(JSON.stringify(res));
+                    } else {
+                        uid = (req.payload as AuthPayload).uid;
+                        const iat = new Date().getTime() / 1000;
+                        const token = jwt.sign({ uid, iat }, JWT_PKEY);
+                        const res: Res = { data: { token } };
+                        ws.send(JSON.stringify(res));
+                    }
                     break;
                 case 'getAllListings':
                     ws.send('{all cataloged items}');
