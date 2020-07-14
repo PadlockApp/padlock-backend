@@ -8,6 +8,7 @@ import { createPow } from "@textile/powergate-client";
 import { Client, KeyInfo, ThreadID } from '@textile/hub';
 import { Libp2pCryptoIdentity } from '@textile/threads-core';
 import jwt from 'jsonwebtoken';
+import { hashPersonalMessage, fromRpcSig, ecrecover, publicToAddress, bufferToHex, toChecksumAddress } from 'ethereumjs-util';
 import { config } from 'dotenv';
 import { FileSchema } from './schemas';
 config();
@@ -18,6 +19,7 @@ const {
     DB_USER_API_KEY,
     DB_USER_API_SECRET,
     JWT_PKEY,
+    JWT_SIG_MESSAGE,
 } = process.env;
 
 const app = express();
@@ -83,15 +85,26 @@ wss.on('connection', (ws: SuperWS) => {
                     const token = (req.payload as AuthPayload).token;
                     if (token) {
                         const verification = jwt.verify(token, JWT_PKEY) as AuthToken;
-                        uid = verification.uid;
                         const res: Res = { status: 200 };
+                        uid = verification.uid;
                         ws.send(JSON.stringify(res));
                     } else {
-                        uid = (req.payload as AuthPayload).uid;
-                        const iat = new Date().getTime() / 1000;
-                        const token = jwt.sign({ uid, iat }, JWT_PKEY);
-                        const res: Res = { status: 200, data: { token } };
-                        ws.send(JSON.stringify(res));
+                        const reqUid = (req.payload as AuthPayload).uid;
+                        const signature = (req.payload as AuthPayload).signature;
+                        const { v, r, s } = fromRpcSig(signature);
+                        const msgHash = hashPersonalMessage(Buffer.from(JWT_SIG_MESSAGE));
+                        const publicKey = ecrecover(msgHash, v, r, s);
+                        const sender = publicToAddress(publicKey);
+                        const recoveredUid = bufferToHex(sender);
+                        if (toChecksumAddress(reqUid) === toChecksumAddress(recoveredUid)) {
+                            const iat = new Date().getTime() / 1000;
+                            const token = jwt.sign({ uid, iat }, JWT_PKEY);
+                            const res: Res = { status: 200, data: { token } };
+                            uid = reqUid;
+                            ws.send(JSON.stringify(res));
+                        } else {
+                            throw Error('Couldn\'t match account with signature!');
+                        }
                     }
                     break;
                 case 'getAllListings':
